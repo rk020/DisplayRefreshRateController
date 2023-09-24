@@ -9,7 +9,6 @@
 
 
 BEGIN_MESSAGE_MAP(CDisplayRefreshRateControllerApp, CWinApp)
-    ON_COMMAND(ID_HELP, &CWinApp::OnHelp)
 END_MESSAGE_MAP()
 
 

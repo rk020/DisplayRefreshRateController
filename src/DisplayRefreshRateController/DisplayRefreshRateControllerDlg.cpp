@@ -401,6 +401,31 @@ void CDisplayRefreshRateControllerDlg::InitUiElements(DisplayControllerInterface
     SetActiveAdapter(pControlAdapter, &AdapterList[0]);
 }
 
+HWND CreateToolTip(int ToolId, HWND DialogHandle, PTSTR Message)
+{
+    if (!ToolId || !DialogHandle || !Message)
+        return nullptr;
+
+    HWND ToolHandle = GetDlgItem(DialogHandle, ToolId);
+    HWND ToolTipHandle = CreateWindowEx(NULL, TOOLTIPS_CLASS, nullptr,WS_POPUP | TTS_ALWAYSTIP | TTS_BALLOON,
+                                        CW_USEDEFAULT, CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, DialogHandle,
+                                        nullptr, nullptr, nullptr);
+
+    if (!ToolHandle || !ToolTipHandle)
+        return nullptr;
+
+    // Associate the tooltip with the tool.
+    TOOLINFO toolInfo = {};
+    toolInfo.cbSize = sizeof(toolInfo);
+    toolInfo.hwnd = DialogHandle;
+    toolInfo.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    toolInfo.uId = reinterpret_cast<UINT_PTR>(ToolHandle);
+    toolInfo.lpszText = Message;
+    SendMessage(ToolTipHandle, TTM_ADDTOOL, 0, reinterpret_cast<LPARAM>(&toolInfo));
+
+    return ToolTipHandle;
+}
+
 BOOL CDisplayRefreshRateControllerDlg::OnInitDialog()
 {
     CDialogEx::OnInitDialog();
@@ -411,6 +436,11 @@ BOOL CDisplayRefreshRateControllerDlg::OnInitDialog()
     pActiveController = &IntelController;
 
     InitUiElements(&IntelController);
+
+    CreateToolTip(IDC_STATIC_INC_LIMIT, this->GetSafeHwnd(),
+                  L"Limits how fast the RR can decrease. A lower tolerance can help in reducing stutters or jitters. 0 is equivalent to no limit.");
+    CreateToolTip(IDC_STATIC_DEC_LIMIT, this->GetSafeHwnd(),
+                  L"Limits how fast the RR can increase. A lower tolerance can help in reducing stutters or jitters. 0 is equivalent to no limit.");
 
     return TRUE;
 }

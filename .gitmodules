@@ -1,0 +1,6 @@
+[submodule "submodules/imgui"]
+	path = submodules/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "submodules/drivers.gpu.control-library"]
+	path = submodules/drivers.gpu.control-library
+	url = https://github.com/intel/drivers.gpu.control-library.git

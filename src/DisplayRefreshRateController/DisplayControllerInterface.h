@@ -5,7 +5,7 @@
 class DisplayAdapter
 {
 public:
-    std::wstring Name;
+    std::string Name;
     uint32_t id{};
 };
 
@@ -13,7 +13,7 @@ class DisplayPanel
 {
 public:
     DisplayAdapter* pParentAdapter;
-    std::wstring Name;
+    std::string Name;
     uint32_t id{};
 };
 
@@ -36,15 +36,15 @@ class DisplayRrState
 public:
     float MinRr;
     float MaxRr;
-    uint32_t FrameDurationIncreaseTolerance;
-    uint32_t FrameDurationDecreaseTolerance;
+    int FrameDurationIncreaseTolerance;
+    int FrameDurationDecreaseTolerance;
 };
 
 class RrPreset
 {
 public:
     uint32_t id;
-    std::wstring Name;
+    std::string Name;
 };
 
 class DisplayControllerInterface

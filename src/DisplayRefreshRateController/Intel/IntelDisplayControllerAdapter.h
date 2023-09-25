@@ -17,7 +17,7 @@ class IntelDisplayControllerAdapter final : public DisplayControllerInterface
     void DestroyControlLibrary() const;
     void FillAppId(ctl_application_id_t& ApplicationUID) const;
     void FillPresetMapping();
-    std::wstring GetPanelNameByType(ctl_display_output_types_t Type);
+    std::string GetPanelNameByType(ctl_display_output_types_t Type);
 
 public:
     IntelDisplayControllerAdapter()

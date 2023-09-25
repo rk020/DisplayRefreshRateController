@@ -13,66 +13,96 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\Intel">
-      <UniqueIdentifier>{68c2a0c8-71dc-4a5a-8845-0b54d25452f8}</UniqueIdentifier>
+    <Filter Include="Header Files\imgui">
+      <UniqueIdentifier>{93eae8ec-e68a-4345-be40-fc74aba358f7}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Intel">
-      <UniqueIdentifier>{a02c47a1-27c2-42d4-89f3-ff0ed03f1430}</UniqueIdentifier>
+    <Filter Include="Source Files\imgui">
+      <UniqueIdentifier>{e8efc196-d603-4002-a485-13d004c334fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\intel">
+      <UniqueIdentifier>{ea353424-b8fc-4668-a9c5-ba4ab7b22a7b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\intel">
+      <UniqueIdentifier>{e4353a98-ac48-4b7a-b57c-da51205435d2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="DisplayRefreshRateController.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imconfig.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="DisplayRefreshRateControllerDlg.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imgui.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="framework.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imgui_internal.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imstb_rectpack.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="Resource.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imstb_textedit.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="Intel\igcl_api.h">
-      <Filter>Header Files\Intel</Filter>
+    <ClInclude Include="..\..\submodules\imgui\imstb_truetype.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\submodules\imgui\backends\imgui_impl_dx12.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\submodules\imgui\backends\imgui_impl_win32.h">
+      <Filter>Header Files\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\submodules\drivers.gpu.control-library\includes\igcl_api.h">
+      <Filter>Header Files\intel</Filter>
+    </ClInclude>
+    <ClInclude Include="Intel\IntelDisplayControllerAdapter.h">
+      <Filter>Header Files\intel</Filter>
     </ClInclude>
     <ClInclude Include="DisplayControllerInterface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Intel\IntelDisplayControllerAdapter.h">
-      <Filter>Header Files\Intel</Filter>
+    <ClInclude Include="DisplayRefreshRateController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\submodules\imgui\misc\cpp\imgui_stdlib.h">
+      <Filter>Header Files\imgui</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\submodules\imgui\imgui.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\imgui_demo.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\imgui_draw.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\imgui_tables.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\imgui_widgets.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\backends\imgui_impl_dx12.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>Source Files\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\submodules\drivers.gpu.control-library\wrapper\cApiWrapper.cpp">
+      <Filter>Source Files\intel</Filter>
+    </ClCompile>
+    <ClCompile Include="Intel\IntelDisplayControllerAdapter.cpp">
+      <Filter>Source Files\intel</Filter>
+    </ClCompile>
     <ClCompile Include="DisplayRefreshRateController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="DisplayRefreshRateControllerDlg.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="..\..\submodules\imgui\misc\cpp\imgui_stdlib.cpp">
+      <Filter>Source Files\imgui</Filter>
     </ClCompile>
-    <ClCompile Include="Intel\cApiWrapper.cpp">
-      <Filter>Source Files\Intel</Filter>
-    </ClCompile>
-    <ClCompile Include="Intel\IntelDisplayControllerAdapter.cpp">
-      <Filter>Source Files\Intel</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="DisplayRefreshRateController.rc">
-      <Filter>Resource Files</Filter>
-    </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="res\DisplayRefreshRateController.rc2">
-      <Filter>Resource Files</Filter>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="res\DisplayRefreshRateController.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
   </ItemGroup>
 </Project>

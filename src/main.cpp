@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
@@ -55,6 +57,20 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 DisplayRrController RrController;
 
+void delay(int delayInUs)
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    while (true)
+    {
+        stop = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        if (duration.count() >= delayInUs)
+            return;
+    }
+}
+
 // Main code
 int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
 {
@@ -73,7 +89,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Display Refresh Rate Controller (Gaming)",
                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX, 200, 200,
-                                800, 400, nullptr, nullptr, wc.hInstance, nullptr);
+                                800, 500, nullptr, nullptr, wc.hInstance, nullptr);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -113,9 +129,14 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
     // Our state
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    static int currentAdapter = 0; // This will hold the index of the selected item
-    static int currentPanel = 0; // This will hold the index of the selected item
-    static int currentPreset = 0; // This will hold the index of the selected item
+    static int currentAdapter = 0;
+    static int currentPanel = 0;
+    static int currentPreset = 0;
+    static int firstFps = 120;
+    static int secondFps = 120;
+    static bool enableAlternateFps = false;
+    static bool toggleFps = false;
+
     for (int i = 0; i < RrController.RrPresetList.size(); i++)
         if (RrController.RrPresetList[i].id == RrController.pActivePreset->id)
             currentPreset = i;
@@ -146,7 +167,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         {
             static float f = 0.0f;
             ImGui::SetNextWindowPos(ImVec2(0, 0));
-            ImGui::SetNextWindowSize(ImVec2(800, 600));
+            ImGui::SetNextWindowSize(ImVec2(800, 500));
             ImGui::Begin("Refresh Rate State", nullptr, ImGuiWindowFlags_NoDecoration);
 
             ImGui::Text("Select Adapter");
@@ -335,9 +356,26 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                 }
             }
 
-            ImGui::Dummy(ImVec2(0, 10));
+            ImGui::Dummy(ImVec2(0, 20));
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Control the FPS");
+            ImGui::SliderInt("##slider5", &firstFps, 20, 300);
 
-            // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::Checkbox("Alternate FPS", &enableAlternateFps);
+            if (enableAlternateFps)
+            {
+                ImGui::SliderInt("##slider6", &secondFps, 20, 300);
+            }
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            if (enableAlternateFps)
+            {
+                delay(1000000 / (toggleFps ? firstFps : secondFps));
+                toggleFps = !toggleFps;
+            }
+            else
+            {
+                delay(1000000 / firstFps);
+            }
             ImGui::End();
         }
 

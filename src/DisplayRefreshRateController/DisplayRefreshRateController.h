@@ -1,18 +1,28 @@
 #pragma once
-#include "resource.h"		// main symbols
+#include "Intel/IntelDisplayControllerAdapter.h"
 
 
-class CDisplayRefreshRateControllerApp : public CWinApp
+// DisplayRrController dialog
+class DisplayRrController
 {
 public:
-    CDisplayRefreshRateControllerApp();
+    IntelDisplayControllerAdapter IntelController;
+    DisplayControllerInterface* pActiveController;
 
-    // Overrides
-public:
-    virtual BOOL InitInstance();
-    // Implementation
+    std::vector<DisplayAdapter> AdapterList;
+    DisplayAdapter* pActiveAdapter;
 
-    DECLARE_MESSAGE_MAP()
+    std::vector<DisplayPanel> PanelList;
+    DisplayPanel* pActivePanel;
+
+    std::vector<RrPreset> RrPresetList;
+    RrPreset *pActivePreset, *pSelectedPreset;
+
+    DisplayRrCaps ActiveRrCaps;
+    DisplayRrState ActiveRrState, SelectedRrState;
+
+    virtual bool Init();
+    virtual void SetActiveAdapter(DisplayControllerInterface*, DisplayAdapter*);
+    virtual void SetActivePanel(DisplayControllerInterface*, DisplayPanel*);
+    virtual bool Apply(int SelectedPreset);
 };
-
-extern CDisplayRefreshRateControllerApp theApp;

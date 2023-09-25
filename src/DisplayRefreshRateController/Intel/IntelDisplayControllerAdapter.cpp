@@ -1,9 +1,7 @@
 #pragma once
 
 #include <Windows.h>
-#include <codecvt>
 #include <fstream>
-#include <cvt/wstring>
 #include "IntelDisplayControllerAdapter.h"
 
 ctl_result_t IntelDisplayControllerAdapter::InitControlLibrary()
@@ -40,27 +38,27 @@ void IntelDisplayControllerAdapter::DestroyControlLibrary() const
 void IntelDisplayControllerAdapter::FillPresetMapping()
 {
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_INVALID,
-                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_INVALID, L"INVALID"}));
+                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_INVALID, "INVALID"}));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_RECOMMENDED,
                                                        RrPreset{
-                                                           CTL_INTEL_ARC_SYNC_PROFILE_RECOMMENDED, L"RECOMMENDED"
+                                                           CTL_INTEL_ARC_SYNC_PROFILE_RECOMMENDED, "RECOMMENDED"
                                                        }));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_EXCELLENT,
                                                        RrPreset{
-                                                           CTL_INTEL_ARC_SYNC_PROFILE_EXCELLENT, L"EXCELLENT"
+                                                           CTL_INTEL_ARC_SYNC_PROFILE_EXCELLENT, "EXCELLENT"
                                                        }));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_GOOD,
-                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_GOOD, L"GOOD"}));
+                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_GOOD, "GOOD"}));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_COMPATIBLE,
                                                        RrPreset{
-                                                           CTL_INTEL_ARC_SYNC_PROFILE_COMPATIBLE, L"COMPATIBLE"
+                                                           CTL_INTEL_ARC_SYNC_PROFILE_COMPATIBLE, "COMPATIBLE"
                                                        }));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_OFF,
-                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_OFF, L"OFF"}));
+                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_OFF, "OFF"}));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_VESA,
-                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_VESA, L"VESA"}));
+                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_VESA, "VESA"}));
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM,
-                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM, L"CUSTOM"}));
+                                                       RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM, "CUSTOM"}));
 }
 
 void IntelDisplayControllerAdapter::FillAppId(ctl_application_id_t& ApplicationUID) const
@@ -83,19 +81,19 @@ void IntelDisplayControllerAdapter::FillAppId(ctl_application_id_t& ApplicationU
     }
 }
 
-std::wstring IntelDisplayControllerAdapter::GetPanelNameByType(ctl_display_output_types_t Type)
+std::string IntelDisplayControllerAdapter::GetPanelNameByType(ctl_display_output_types_t Type)
 {
     switch (Type)
     {
-    case CTL_DISPLAY_OUTPUT_TYPES_DISPLAYPORT: return L"DP Intel Display";
-    case CTL_DISPLAY_OUTPUT_TYPES_HDMI: return L"HDMI Intel Display";
-    case CTL_DISPLAY_OUTPUT_TYPES_DVI: return L"DVI Intel Display";
-    case CTL_DISPLAY_OUTPUT_TYPES_MIPI: return L"MIPI Intel Display";
-    case CTL_DISPLAY_OUTPUT_TYPES_CRT: return L"CRT Intel Display";
+    case CTL_DISPLAY_OUTPUT_TYPES_DISPLAYPORT: return "DP Intel Display";
+    case CTL_DISPLAY_OUTPUT_TYPES_HDMI: return "HDMI Intel Display";
+    case CTL_DISPLAY_OUTPUT_TYPES_DVI: return "DVI Intel Display";
+    case CTL_DISPLAY_OUTPUT_TYPES_MIPI: return "MIPI Intel Display";
+    case CTL_DISPLAY_OUTPUT_TYPES_CRT: return "CRT Intel Display";
     case CTL_DISPLAY_OUTPUT_TYPES_INVALID:
     case CTL_DISPLAY_OUTPUT_TYPES_MAX:
     default:
-        return L"Invalid Intel Display";
+        return "Invalid Intel Display";
     }
 }
 
@@ -128,7 +126,7 @@ std::vector<DisplayAdapter> IntelDisplayControllerAdapter::GetDisplayAdapters()
     {
         DisplayAdapter adapter;
 
-        adapter.Name = L"Intel DisplayPanel Adapter";
+        adapter.Name = "Intel DisplayPanel Adapter";
 
         Result = ctlGetDeviceProperties(pDevices[i], &StDeviceAdapterProperties);
         if (CTL_RESULT_ERROR_UNSUPPORTED_VERSION == Result) // reduce version if required & recheck
@@ -140,8 +138,7 @@ std::vector<DisplayAdapter> IntelDisplayControllerAdapter::GetDisplayAdapters()
         if ((Result == CTL_RESULT_SUCCESS) && (CTL_DEVICE_TYPE_GRAPHICS == StDeviceAdapterProperties.device_type) &&
             (0x8086 == StDeviceAdapterProperties.pci_vendor_id))
         {
-            stdext::cvt::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
-            adapter.Name = converter.from_bytes(StDeviceAdapterProperties.name);
+            adapter.Name = StDeviceAdapterProperties.name;
         }
 
         adapter.id = i;
@@ -239,13 +236,13 @@ std::vector<RrPreset> IntelDisplayControllerAdapter::GetSupportedPresets(Display
 {
     std::vector<RrPreset> presets;
 
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_RECOMMENDED, L"RECOMMENDED"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_EXCELLENT, L"EXCELLENT"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_GOOD, L"GOOD"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_COMPATIBLE, L"COMPATIBLE"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_OFF, L"OFF"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_VESA, L"VESA"});
-    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM, L"CUSTOM"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_RECOMMENDED, "RECOMMENDED"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_EXCELLENT, "EXCELLENT"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_GOOD, "GOOD"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_COMPATIBLE, "COMPATIBLE"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_OFF, "OFF"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_VESA, "VESA"});
+    presets.push_back(RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM, "CUSTOM"});
 
     return presets;
 }
@@ -260,7 +257,7 @@ RrPreset IntelDisplayControllerAdapter::GetRrPreset(DisplayPanel* pDisplay)
         pDisplayHandles[pDisplay->pParentAdapter->id][pDisplay->id],
         &StIntelArcSyncProfileParams);
     if (CTL_RESULT_SUCCESS != Result)
-        return RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_INVALID, L"INVALID"};
+        return RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_INVALID, "INVALID"};
 
     return PresetMapping.at(StIntelArcSyncProfileParams.IntelArcSyncProfile);
 }
@@ -293,8 +290,8 @@ DisplayRrState IntelDisplayControllerAdapter::GetRrState(DisplayPanel* pDisplay)
 
     RrState.MinRr = StIntelArcSyncProfileParams.MinRefreshRateInHz;
     RrState.MaxRr = StIntelArcSyncProfileParams.MaxRefreshRateInHz;
-    RrState.FrameDurationIncreaseTolerance = StIntelArcSyncProfileParams.MaxFrameTimeIncreaseInUs;
-    RrState.FrameDurationDecreaseTolerance = StIntelArcSyncProfileParams.MaxFrameTimeDecreaseInUs;
+    RrState.FrameDurationIncreaseTolerance = static_cast<int>(StIntelArcSyncProfileParams.MaxFrameTimeIncreaseInUs);
+    RrState.FrameDurationDecreaseTolerance = static_cast<int>(StIntelArcSyncProfileParams.MaxFrameTimeDecreaseInUs);
 
     return RrState;
 }

@@ -1,0 +1,20 @@
+name: Update Submodules
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # This schedule runs every Sunday at midnight UTC
+
+jobs:
+  update-submodules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Update Submodules
+        run: |
+          git submodule update --recursive --remote
+          git add .
+          git commit -m "Auto-update submodules" || true
+          git push origin HEAD:${GITHUB_REF}

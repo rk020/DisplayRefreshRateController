@@ -1,20 +1,28 @@
 name: Update Submodules
 
 on:
-  schedule:
-    - cron: '0 0 * * 0' # This schedule runs every Sunday at midnight UTC
+  pull_request:
 
 jobs:
-  update-submodules:
+  update:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CI_TOKEN }}
+          submodules: true
 
-      - name: Update Submodules
+      - name: Pull & update submodules recursively
         run: |
+          git submodule update --init --recursive
           git submodule update --recursive --remote
-          git add .
-          git commit -m "Auto-update submodules" || true
+
+      - name: Commit
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions - update submodules"
+          git add --all
+          git commit -m "Update submodules" || echo "No changes to commit"
           git push origin HEAD:${GITHUB_REF}

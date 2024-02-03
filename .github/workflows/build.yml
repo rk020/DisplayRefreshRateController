@@ -16,15 +16,15 @@ jobs:
         platform: [ x64 ]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.1.1
         with:
           submodules: 'true'
 
       - name: Setup MSBuild.exe
-        uses: microsoft/setup-msbuild@v1.3.1
+        uses: microsoft/setup-msbuild@v2
 
       - name: Use NuGet 5.2.0
-        uses: nuget/setup-nuget@v1.2.0
+        uses: nuget/setup-nuget@v2.0.0
 
       - name: Restore nuget packages
         run: msbuild 'src/DisplayRefreshRateController/DisplayRefreshRateController.sln' /p:configuration=${{ matrix.configuration }} /p:platform=${{ matrix.platform }} /t:restore
@@ -33,7 +33,7 @@ jobs:
         run: msbuild 'src/DisplayRefreshRateController/DisplayRefreshRateController.sln' /p:configuration=${{ matrix.configuration }} /p:platform=${{ matrix.platform }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.3.0
         with:
           name: DisplayRefreshRateController-${{ matrix.configuration }}-${{ matrix.platform }}
           path: ./src/DisplayRefreshRateController/${{ matrix.platform }}/${{ matrix.configuration }}/DisplayRefreshRateController.exe

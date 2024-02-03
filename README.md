@@ -1,5 +1,7 @@
 [![Build](https://github.com/rk020/DisplayRefreshRateController/actions/workflows/build.yml/badge.svg)](https://github.com/rk020/DisplayRefreshRateController/actions/workflows/build.yml)
 
+### [Download the latest build](https://github.com/rk020/DisplayRefreshRateController/actions/runs/7766652887/artifacts/1217315018)
+
 # Display Refresh Rate Controller
 
 Display Refresh Rate Controller is a utility designed to dynamically manage display refresh rates. It shows the

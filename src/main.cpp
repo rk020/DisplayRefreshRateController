@@ -87,7 +87,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
         L"ImGui Example", nullptr
     };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Display Refresh Rate Controller (Gaming)",
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Display Refresh Rate Controller",
                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX, 200, 200,
                                 800, 500, nullptr, nullptr, wc.hInstance, nullptr);
 
@@ -123,8 +123,7 @@ int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmd
                         g_pd3dSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
 
     // Load Fonts
-    ImFont* font = io.Fonts->AddFontFromFileTTF("../../submodules/imgui/misc/fonts/Roboto-Medium.ttf", 18.0f);
-    IM_ASSERT(font != nullptr);
+    io.FontDefault = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\Calibri.ttf)", 13.0f);
 
     // Our state
     bool show_another_window = false;

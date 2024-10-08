@@ -8,6 +8,7 @@ project(${APP_NAME})
 
 set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/D3DManager.cpp
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.cpp
     )
 
@@ -47,6 +48,7 @@ source_group("Source Files\\igcl" FILES
 )
 
 set(HEADER_FILES
+    ${CMAKE_CURRENT_LIST_DIR}/D3DManager.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayControllerInterface.h
     )

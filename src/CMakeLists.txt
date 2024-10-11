@@ -18,7 +18,7 @@ source_group("Source Files" FILES
 )
 
 set(SOURCE_FILES_INTEL
-    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayControllerAdapter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayController.cpp
     )
 
 source_group("Source Files\\intel" FILES
@@ -27,7 +27,6 @@ source_group("Source Files\\intel" FILES
 
 set(SOURCE_FILES_IMGUI
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_demo.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_draw.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_tables.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_widgets.cpp
@@ -52,7 +51,7 @@ set(HEADER_FILES
     ${CMAKE_CURRENT_LIST_DIR}/D3DManager.h
     ${CMAKE_CURRENT_LIST_DIR}/AppContext.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.h
-    ${CMAKE_CURRENT_LIST_DIR}/DisplayControllerInterface.h
+    ${CMAKE_CURRENT_LIST_DIR}/IDisplayController.h
     )
 
 source_group("Header Files" FILES
@@ -60,7 +59,7 @@ source_group("Header Files" FILES
     )
 
 set(HEADER_FILES_INTEL
-    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayControllerAdapter.h
+    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayController.h
     )
 
 source_group("Header Files\\intel" FILES

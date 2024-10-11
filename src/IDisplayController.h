@@ -47,7 +47,7 @@ public:
     std::string Name;
 };
 
-class DisplayControllerInterface
+class IDisplayController
 {
 public:
     virtual std::vector<DisplayAdapter> GetDisplayAdapters() = 0;

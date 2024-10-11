@@ -3,11 +3,13 @@ enable_language(C CXX)
 
 set(APP_NAME "DisplayRefreshRateController")
 set(EXE_NAME "${APP_NAME}")
+set(APP_VERSION "2024.1.0")
 
 project(${APP_NAME})
 
 set(SOURCE_FILES
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/D3DManager.cpp
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.cpp
     )
 
@@ -16,7 +18,7 @@ source_group("Source Files" FILES
 )
 
 set(SOURCE_FILES_INTEL
-    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayControllerAdapter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayController.cpp
     )
 
 source_group("Source Files\\intel" FILES
@@ -25,7 +27,6 @@ source_group("Source Files\\intel" FILES
 
 set(SOURCE_FILES_IMGUI
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_demo.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_draw.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_tables.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../submodules/imgui/imgui_widgets.cpp
@@ -47,8 +48,10 @@ source_group("Source Files\\igcl" FILES
 )
 
 set(HEADER_FILES
+    ${CMAKE_CURRENT_LIST_DIR}/D3DManager.h
+    ${CMAKE_CURRENT_LIST_DIR}/AppContext.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.h
-    ${CMAKE_CURRENT_LIST_DIR}/DisplayControllerInterface.h
+    ${CMAKE_CURRENT_LIST_DIR}/IDisplayController.h
     )
 
 source_group("Header Files" FILES
@@ -56,7 +59,7 @@ source_group("Header Files" FILES
     )
 
 set(HEADER_FILES_INTEL
-    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayControllerAdapter.h
+    ${CMAKE_CURRENT_LIST_DIR}/Intel/IntelDisplayController.h
     )
 
 source_group("Header Files\\intel" FILES
@@ -88,6 +91,12 @@ source_group("Header Files\\igcl" FILES
     )
 
 set(CMAKE_CXX_STANDARD 17)
+
+add_compile_definitions(
+    APP_NAME="${APP_NAME}"
+    APP_NAME_W=L"${APP_NAME}"
+    APP_VERSION="${APP_VERSION}"
+)
 
 add_executable(${APP_NAME} WIN32 ${SOURCE_FILES} ${SOURCE_FILES_INTEL} ${SOURCE_FILES_IMGUI} ${SOURCE_FILES_IGCL} ${HEADER_FILES} ${HEADER_FILES_INTEL} ${HEADER_FILES_IMGUI} ${HEADER_FILES_IGCL})
 set_target_properties(${APP_NAME} PROPERTIES OUTPUT_NAME ${EXE_NAME})

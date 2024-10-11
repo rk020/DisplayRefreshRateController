@@ -2,9 +2,9 @@
 
 #include <Windows.h>
 #include <fstream>
-#include "IntelDisplayControllerAdapter.h"
+#include "IntelDisplayController.h"
 
-ctl_result_t IntelDisplayControllerAdapter::InitControlLibrary()
+ctl_result_t IntelDisplayController::InitControlLibrary()
 {
     ctl_result_t Result;
     ctl_init_args_t CtlInitArgs;
@@ -28,14 +28,14 @@ ctl_result_t IntelDisplayControllerAdapter::InitControlLibrary()
     return CTL_RESULT_SUCCESS;
 }
 
-void IntelDisplayControllerAdapter::DestroyControlLibrary() const
+void IntelDisplayController::DestroyControlLibrary() const
 {
     ctlClose(ApiHandle);
     if (pDevices != nullptr)
         free(pDevices);
 }
 
-void IntelDisplayControllerAdapter::FillPresetMapping()
+void IntelDisplayController::FillPresetMapping()
 {
     PresetMapping.insert(std::pair<uint32_t, RrPreset>(CTL_INTEL_ARC_SYNC_PROFILE_INVALID,
                                                        RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_INVALID, "INVALID"}));
@@ -61,7 +61,7 @@ void IntelDisplayControllerAdapter::FillPresetMapping()
                                                        RrPreset{CTL_INTEL_ARC_SYNC_PROFILE_CUSTOM, "CUSTOM"}));
 }
 
-void IntelDisplayControllerAdapter::FillAppId(ctl_application_id_t& ApplicationUID) const
+void IntelDisplayController::FillAppId(ctl_application_id_t& ApplicationUID) const
 {
     std::ifstream file("C:\\ControlLibraryAppId.txt");
     if (file.is_open())
@@ -81,7 +81,7 @@ void IntelDisplayControllerAdapter::FillAppId(ctl_application_id_t& ApplicationU
     }
 }
 
-std::string IntelDisplayControllerAdapter::GetPanelNameByType(ctl_display_output_types_t Type)
+std::string IntelDisplayController::GetPanelNameByType(ctl_display_output_types_t Type)
 {
     switch (Type)
     {
@@ -97,7 +97,7 @@ std::string IntelDisplayControllerAdapter::GetPanelNameByType(ctl_display_output
     }
 }
 
-std::vector<DisplayAdapter> IntelDisplayControllerAdapter::GetDisplayAdapters()
+std::vector<DisplayAdapter> IntelDisplayController::GetDisplayAdapters()
 {
     ctl_result_t Result;
     ctl_device_adapter_properties_t StDeviceAdapterProperties = {0};
@@ -154,7 +154,7 @@ std::vector<DisplayAdapter> IntelDisplayControllerAdapter::GetDisplayAdapters()
     return adapters;
 }
 
-std::vector<DisplayPanel> IntelDisplayControllerAdapter::GetDisplayPanels(DisplayAdapter* pAdapter)
+std::vector<DisplayPanel> IntelDisplayController::GetDisplayPanels(DisplayAdapter* pAdapter)
 {
     ctl_result_t Result;
     uint32_t DisplayCount = 0;
@@ -203,7 +203,7 @@ std::vector<DisplayPanel> IntelDisplayControllerAdapter::GetDisplayPanels(Displa
     return displays;
 }
 
-DisplayRrCaps IntelDisplayControllerAdapter::GetDisplayRrCaps(DisplayPanel* pDisplay)
+DisplayRrCaps IntelDisplayController::GetDisplayRrCaps(DisplayPanel* pDisplay)
 {
     DisplayRrCaps caps = {};
     ctl_intel_arc_sync_monitor_params_t StIntelArcSyncMonitorParams;
@@ -232,7 +232,7 @@ DisplayRrCaps IntelDisplayControllerAdapter::GetDisplayRrCaps(DisplayPanel* pDis
     return caps;
 }
 
-std::vector<RrPreset> IntelDisplayControllerAdapter::GetSupportedPresets(DisplayPanel* pDisplay)
+std::vector<RrPreset> IntelDisplayController::GetSupportedPresets(DisplayPanel* pDisplay)
 {
     std::vector<RrPreset> presets;
 
@@ -247,7 +247,7 @@ std::vector<RrPreset> IntelDisplayControllerAdapter::GetSupportedPresets(Display
     return presets;
 }
 
-RrPreset IntelDisplayControllerAdapter::GetRrPreset(DisplayPanel* pDisplay)
+RrPreset IntelDisplayController::GetRrPreset(DisplayPanel* pDisplay)
 {
     ctl_intel_arc_sync_profile_params_t StIntelArcSyncProfileParams;
 
@@ -262,7 +262,7 @@ RrPreset IntelDisplayControllerAdapter::GetRrPreset(DisplayPanel* pDisplay)
     return PresetMapping.at(StIntelArcSyncProfileParams.IntelArcSyncProfile);
 }
 
-bool IntelDisplayControllerAdapter::SetRrPreset(DisplayPanel* pDisplay, RrPreset* pPreset)
+bool IntelDisplayController::SetRrPreset(DisplayPanel* pDisplay, RrPreset* pPreset)
 {
     ctl_intel_arc_sync_profile_params_t StIntelArcSyncProfileParams = {};
 
@@ -275,7 +275,7 @@ bool IntelDisplayControllerAdapter::SetRrPreset(DisplayPanel* pDisplay, RrPreset
     return (CTL_RESULT_SUCCESS == Result);
 }
 
-DisplayRrState IntelDisplayControllerAdapter::GetRrState(DisplayPanel* pDisplay)
+DisplayRrState IntelDisplayController::GetRrState(DisplayPanel* pDisplay)
 {
     DisplayRrState RrState = {};
     ctl_intel_arc_sync_profile_params_t StIntelArcSyncProfileParams;
@@ -297,7 +297,7 @@ DisplayRrState IntelDisplayControllerAdapter::GetRrState(DisplayPanel* pDisplay)
 }
 
 
-bool IntelDisplayControllerAdapter::SetRrState(DisplayPanel* pDisplay, DisplayRrState* pRrState)
+bool IntelDisplayController::SetRrState(DisplayPanel* pDisplay, DisplayRrState* pRrState)
 {
     ctl_intel_arc_sync_profile_params_t StIntelArcSyncProfileParams;
     ctl_result_t Result;

@@ -1,665 +1,20 @@
-#include "imgui.h"
-#include "imgui_impl_win32.h"
-#include "imgui_impl_dx12.h"
-#include <d3d12.h>
-#include <dxgi1_4.h>
+#include <chrono>
 #include <string>
 #include <tchar.h>
 #include <vector>
 #include <Windows.h>
-#include "DisplayRefreshRateController.h"
+
+#include "imgui.h"
+#include "imgui_impl_dx12.h"
 #include "imgui_internal.h"
 
-#ifdef _DEBUG
-#define DX12_ENABLE_DEBUG_LAYER
-#endif
+#include "AppContext.h"
+#include "D3DManager.h"
+#include "DisplayRefreshRateController.h"
 
-#ifdef DX12_ENABLE_DEBUG_LAYER
-#include <dxgidebug.h>
-#pragma comment(lib, "dxguid.lib")
-#endif
+static D3DManager g_D3DManager = {};
+static APP_CONTEXT g_AppContext = {};
 
-struct FrameContext
-{
-    ID3D12CommandAllocator* CommandAllocator;
-    UINT64 FenceValue;
-};
-
-// Data
-static int const NUM_FRAMES_IN_FLIGHT = 3;
-static FrameContext g_frameContext[NUM_FRAMES_IN_FLIGHT] = {};
-static UINT g_frameIndex = 0;
-
-static int const NUM_BACK_BUFFERS = 3;
-static ID3D12Device* g_pd3dDevice = nullptr;
-static ID3D12DescriptorHeap* g_pd3dRtvDescHeap = nullptr;
-static ID3D12DescriptorHeap* g_pd3dSrvDescHeap = nullptr;
-static ID3D12CommandQueue* g_pd3dCommandQueue = nullptr;
-static ID3D12GraphicsCommandList* g_pd3dCommandList = nullptr;
-static ID3D12Fence* g_fence = nullptr;
-static HANDLE g_fenceEvent = nullptr;
-static UINT64 g_fenceLastSignaledValue = 0;
-static IDXGISwapChain3* g_pSwapChain = nullptr;
-static HANDLE g_hSwapChainWaitableObject = nullptr;
-static ID3D12Resource* g_mainRenderTargetResource[NUM_BACK_BUFFERS] = {};
-static D3D12_CPU_DESCRIPTOR_HANDLE g_mainRenderTargetDescriptor[NUM_BACK_BUFFERS] = {};
-
-// Forward declarations of helper functions
-bool CreateDeviceD3D(HWND hWnd);
-void CleanupDeviceD3D();
-void CreateRenderTarget();
-void CleanupRenderTarget();
-void WaitForLastSubmittedFrame();
-FrameContext* WaitForNextFrameResources();
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-DisplayRrController RrController;
-
-// Main code
-int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
-{
-    RrController = DisplayRrController();
-    bool status = RrController.Init();
-
-    if (!status)
-        return -1;
-
-    // Create application window
-    //ImGui_ImplWin32_EnableDpiAwareness();
-    WNDCLASSEXW wc = {
-        sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr,
-        L"ImGui Example", nullptr
-    };
-    ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Display Refresh Rate Controller (Gaming)",
-                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX, 200, 200,
-                                800, 400, nullptr, nullptr, wc.hInstance, nullptr);
-
-    // Initialize Direct3D
-    if (!CreateDeviceD3D(hwnd))
-    {
-        CleanupDeviceD3D();
-        ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-        return 1;
-    }
-
-    // Show the window
-    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
-    ::UpdateWindow(hwnd);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplDX12_Init(g_pd3dDevice, NUM_FRAMES_IN_FLIGHT,
-                        DXGI_FORMAT_R8G8B8A8_UNORM, g_pd3dSrvDescHeap,
-                        g_pd3dSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
-                        g_pd3dSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
-
-    // Load Fonts
-    ImFont* font = io.Fonts->AddFontFromFileTTF("../../submodules/imgui/misc/fonts/Roboto-Medium.ttf", 18.0f);
-    IM_ASSERT(font != nullptr);
-
-    // Our state
-    bool show_another_window = false;
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    static int currentAdapter = 0; // This will hold the index of the selected item
-    static int currentPanel = 0; // This will hold the index of the selected item
-    static int currentPreset = 0; // This will hold the index of the selected item
-    for (int i = 0; i < RrController.RrPresetList.size(); i++)
-        if (RrController.RrPresetList[i].id == RrController.pActivePreset->id)
-            currentPreset = i;
-
-    // Main loop
-    bool done = false;
-    while (!done)
-    {
-        // Poll and handle messages (inputs, window resize, etc.)
-        // See the WndProc() function below for our to dispatch events to the Win32 backend.
-        MSG msg;
-        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-        {
-            ::TranslateMessage(&msg);
-            ::DispatchMessage(&msg);
-            if (msg.message == WM_QUIT)
-                done = true;
-        }
-        if (done)
-            break;
-
-        // Start the Dear ImGui frame
-        ImGui_ImplDX12_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
-            static float f = 0.0f;
-            ImGui::SetNextWindowPos(ImVec2(0, 0));
-            ImGui::SetNextWindowSize(ImVec2(800, 600));
-            ImGui::Begin("Refresh Rate State", nullptr, ImGuiWindowFlags_NoDecoration);
-
-            ImGui::Text("Select Adapter");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(250);
-            if (ImGui::Combo("##combo1", &currentAdapter, [](void* vec, int idx, const char** out_text)
-            {
-                const std::vector<DisplayAdapter>& adapter = *static_cast<std::vector<DisplayAdapter>*>(vec);
-                if (idx >= 0 && idx < adapter.size())
-                {
-                    *out_text = adapter[idx].Name.c_str();
-                    return true;
-                }
-                return false;
-            }, &RrController.AdapterList, RrController.AdapterList.size()))
-            {
-                RrController.SetActiveAdapter(RrController.pActiveController,
-                                              &RrController.AdapterList[currentAdapter]);
-            }
-
-            ImGui::SameLine();
-            ImGui::Text("Select Panel");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(150);
-            if (ImGui::Combo("##combo2", &currentPanel, [](void* vec, int idx, const char** out_text)
-            {
-                const std::vector<DisplayPanel>& panel = *static_cast<std::vector<DisplayPanel>*>(vec);
-                if (idx >= 0 && idx < panel.size())
-                {
-                    *out_text = panel[idx].Name.c_str();
-                    return true;
-                }
-                return false;
-            }, &RrController.PanelList, RrController.PanelList.size()))
-            {
-                RrController.SetActivePanel(RrController.pActiveController, &RrController.PanelList[currentPanel]);
-            }
-
-            ImGui::Dummy(ImVec2(0, 20));
-
-            if (RrController.ActiveRrCaps.IsDisplayRrPresetsSupported)
-            {
-                ImGui::Text("Refresh Rate Preset");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(250);
-                if (ImGui::Combo("##combo3", &currentPreset, [](void* vec, int idx, const char** out_text)
-                {
-                    const std::vector<RrPreset>& preset = *static_cast<std::vector<RrPreset>*>(vec);
-                    if (idx >= 0 && idx < preset.size())
-                    {
-                        *out_text = preset[idx].Name.c_str();
-                        return true;
-                    }
-                    return false;
-                }, &RrController.RrPresetList, RrController.RrPresetList.size()))
-                {
-                    RrController.pSelectedPreset = &RrController.RrPresetList[currentPreset];
-                }
-
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(100);
-                if (ImGui::Button("Apply"))
-                {
-                    RrController.Apply(currentPreset);
-                    for (int i = 0; i < RrController.RrPresetList.size(); i++)
-                        if (RrController.RrPresetList[i].id == RrController.pActivePreset->id)
-                            currentPreset = i;
-                }
-
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(100);
-                if (ImGui::Button("Refresh"))
-                {
-                    RrController.SetActivePanel(RrController.pActiveController, RrController.pActivePanel);
-                    for (int i = 0; i < RrController.RrPresetList.size(); i++)
-                        if (RrController.RrPresetList[i].id == RrController.pActivePreset->id)
-                            currentPreset = i;
-                }
-            }
-
-            ImGui::Dummy(ImVec2(0, 20));
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Adjust Refresh Rate Range (Gaming)");
-
-            if (RrController.ActiveRrCaps.IsMinRrChangeSupported)
-            {
-                ImGui::SetNextItemWidth(150);
-                ImGui::Text("Minimum RR (Hz)");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(250);
-                if ("CUSTOM" == RrController.pSelectedPreset->Name)
-                {
-                    ImGui::SliderFloat("##slider1", &RrController.ActiveRrState.MinRr,
-                                       RrController.ActiveRrCaps.SupportedMinRr,
-                                       RrController.ActiveRrCaps.SupportedMaxRr);
-                }
-                else
-                {
-                    ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-                    ImGui::SliderFloat("##slider1", &RrController.ActiveRrState.MinRr,
-                                       RrController.ActiveRrCaps.SupportedMinRr,
-                                       RrController.ActiveRrCaps.SupportedMaxRr);
-                    ImGui::PopItemFlag();
-                    ImGui::PopStyleVar();
-                }
-            }
-
-            if (RrController.ActiveRrCaps.IsMaxRrChangeSupported)
-            {
-                ImGui::SetNextItemWidth(150);
-                ImGui::Text("Maximum RR (Hz)");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(250);
-                if ("CUSTOM" == RrController.pSelectedPreset->Name)
-                {
-                    RrController.ActiveRrState.MaxRr = max(RrController.ActiveRrState.MinRr,
-                                                           RrController.ActiveRrState.MaxRr);
-                    ImGui::SliderFloat("##slider2", &RrController.ActiveRrState.MaxRr,
-                                       RrController.ActiveRrState.MinRr,
-                                       RrController.ActiveRrCaps.SupportedMaxRr);
-                }
-                else
-                {
-                    ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-                    ImGui::SliderFloat("##slider2", &RrController.ActiveRrState.MaxRr,
-                                       RrController.ActiveRrState.MinRr,
-                                       RrController.ActiveRrCaps.SupportedMaxRr);
-                    ImGui::PopItemFlag();
-                    ImGui::PopStyleVar();
-                }
-            }
-
-            ImGui::Dummy(ImVec2(0, 20));
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                               "Adjust how fast the RR can change. A lower value can reduce flicker. (0 indicates no limit)");
-
-            int sliderMax = 65000; // 65ms
-            if ((0 != static_cast<int>(RrController.ActiveRrCaps.SupportedMinRr)) && (0 != static_cast<int>(RrController
-                .ActiveRrCaps.SupportedMaxRr)) && (RrController.ActiveRrCaps.SupportedMaxRr > RrController.ActiveRrCaps.
-                SupportedMinRr))
-                sliderMax = static_cast<int>(1000000 / RrController.ActiveRrCaps.SupportedMinRr - 1000000 / RrController
-                    .ActiveRrCaps.SupportedMaxRr);
-
-            if (RrController.ActiveRrCaps.IsFrameDurationIncreaseToleranceSupported)
-            {
-                ImGui::SetNextItemWidth(150);
-                ImGui::Text("Frame Duration Increase Tolerance (us)");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(250);
-                if ("CUSTOM" == RrController.pSelectedPreset->Name)
-                {
-                    ImGui::SliderInt("##slider3", &RrController.ActiveRrState.FrameDurationIncreaseTolerance, 0,
-                                     sliderMax);
-                }
-                else
-                {
-                    ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-                    ImGui::SliderInt("##slider3", &RrController.ActiveRrState.FrameDurationIncreaseTolerance, 0,
-                                     sliderMax);
-                    ImGui::PopItemFlag();
-                    ImGui::PopStyleVar();
-                }
-            }
-
-            if (RrController.ActiveRrCaps.IsFrameDurationDecreaseToleranceSupported)
-            {
-                ImGui::SetNextItemWidth(150);
-                ImGui::Text("Frame Duration Decrease Tolerance (us)");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(250);
-                if ("CUSTOM" == RrController.pSelectedPreset->Name)
-                {
-                    ImGui::SliderInt("##slider4", &RrController.ActiveRrState.FrameDurationDecreaseTolerance, 0,
-                                     sliderMax);
-                }
-                else
-                {
-                    ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-                    ImGui::SliderInt("##slider4", &RrController.ActiveRrState.FrameDurationDecreaseTolerance, 0,
-                                     sliderMax);
-                    ImGui::PopItemFlag();
-                    ImGui::PopStyleVar();
-                }
-            }
-
-            ImGui::Dummy(ImVec2(0, 10));
-
-            // ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);
-            // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        // Rendering
-        ImGui::Render();
-
-        FrameContext* frameCtx = WaitForNextFrameResources();
-        UINT backBufferIdx = g_pSwapChain->GetCurrentBackBufferIndex();
-        frameCtx->CommandAllocator->Reset();
-
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource = g_mainRenderTargetResource[backBufferIdx];
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        g_pd3dCommandList->Reset(frameCtx->CommandAllocator, nullptr);
-        g_pd3dCommandList->ResourceBarrier(1, &barrier);
-
-        // Render Dear ImGui graphics
-        const float clear_color_with_alpha[4] = {
-            clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w
-        };
-        g_pd3dCommandList->ClearRenderTargetView(g_mainRenderTargetDescriptor[backBufferIdx], clear_color_with_alpha, 0,
-                                                 nullptr);
-        g_pd3dCommandList->OMSetRenderTargets(1, &g_mainRenderTargetDescriptor[backBufferIdx], FALSE, nullptr);
-        g_pd3dCommandList->SetDescriptorHeaps(1, &g_pd3dSrvDescHeap);
-        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_pd3dCommandList);
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-        g_pd3dCommandList->ResourceBarrier(1, &barrier);
-        g_pd3dCommandList->Close();
-
-        g_pd3dCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_pd3dCommandList);
-
-        // g_pSwapChain->Present(1, 0); // Present with vsync
-        g_pSwapChain->Present(0, 0); // Present without vsync
-
-        UINT64 fenceValue = g_fenceLastSignaledValue + 1;
-        g_pd3dCommandQueue->Signal(g_fence, fenceValue);
-        g_fenceLastSignaledValue = fenceValue;
-        frameCtx->FenceValue = fenceValue;
-    }
-
-    WaitForLastSubmittedFrame();
-
-    // Cleanup
-    ImGui_ImplDX12_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-
-    CleanupDeviceD3D();
-    ::DestroyWindow(hwnd);
-    ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-
-    return 0;
-}
-
-// Helper functions
-
-bool CreateDeviceD3D(HWND hWnd)
-{
-    // Setup swap chain
-    DXGI_SWAP_CHAIN_DESC1 sd;
-    {
-        ZeroMemory(&sd, sizeof(sd));
-        sd.BufferCount = NUM_BACK_BUFFERS;
-        sd.Width = 0;
-        sd.Height = 0;
-        sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        sd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.SampleDesc.Count = 1;
-        sd.SampleDesc.Quality = 0;
-        sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        sd.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-        sd.Scaling = DXGI_SCALING_STRETCH;
-        sd.Stereo = FALSE;
-    }
-
-    // [DEBUG] Enable debug interface
-#ifdef DX12_ENABLE_DEBUG_LAYER
-    ID3D12Debug* pdx12Debug = nullptr;
-    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pdx12Debug))))
-        pdx12Debug->EnableDebugLayer();
-#endif
-
-    // Create device
-    D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_0;
-    if (D3D12CreateDevice(nullptr, featureLevel, IID_PPV_ARGS(&g_pd3dDevice)) != S_OK)
-        return false;
-
-    // [DEBUG] Setup debug interface to break on any warnings/errors
-#ifdef DX12_ENABLE_DEBUG_LAYER
-    if (pdx12Debug != nullptr)
-    {
-        ID3D12InfoQueue* pInfoQueue = nullptr;
-        g_pd3dDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue));
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true);
-        pInfoQueue->Release();
-        pdx12Debug->Release();
-    }
-#endif
-
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        desc.NumDescriptors = NUM_BACK_BUFFERS;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-        desc.NodeMask = 1;
-        if (g_pd3dDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dRtvDescHeap)) != S_OK)
-            return false;
-
-        SIZE_T rtvDescriptorSize = g_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = g_pd3dRtvDescHeap->GetCPUDescriptorHandleForHeapStart();
-        for (UINT i = 0; i < NUM_BACK_BUFFERS; i++)
-        {
-            g_mainRenderTargetDescriptor[i] = rtvHandle;
-            rtvHandle.ptr += rtvDescriptorSize;
-        }
-    }
-
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        desc.NumDescriptors = 1;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        if (g_pd3dDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&g_pd3dSrvDescHeap)) != S_OK)
-            return false;
-    }
-
-    {
-        D3D12_COMMAND_QUEUE_DESC desc = {};
-        desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-        desc.NodeMask = 1;
-        if (g_pd3dDevice->CreateCommandQueue(&desc, IID_PPV_ARGS(&g_pd3dCommandQueue)) != S_OK)
-            return false;
-    }
-
-    for (UINT i = 0; i < NUM_FRAMES_IN_FLIGHT; i++)
-        if (g_pd3dDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                 IID_PPV_ARGS(&g_frameContext[i].CommandAllocator)) != S_OK)
-            return false;
-
-    if (g_pd3dDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, g_frameContext[0].CommandAllocator, nullptr,
-                                        IID_PPV_ARGS(&g_pd3dCommandList)) != S_OK ||
-        g_pd3dCommandList->Close() != S_OK)
-        return false;
-
-    if (g_pd3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&g_fence)) != S_OK)
-        return false;
-
-    g_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (g_fenceEvent == nullptr)
-        return false;
-
-    {
-        IDXGIFactory4* dxgiFactory = nullptr;
-        IDXGISwapChain1* swapChain1 = nullptr;
-        if (CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory)) != S_OK)
-            return false;
-        if (dxgiFactory->CreateSwapChainForHwnd(g_pd3dCommandQueue, hWnd, &sd, nullptr, nullptr, &swapChain1) != S_OK)
-            return false;
-        if (swapChain1->QueryInterface(IID_PPV_ARGS(&g_pSwapChain)) != S_OK)
-            return false;
-        swapChain1->Release();
-        dxgiFactory->Release();
-        g_pSwapChain->SetMaximumFrameLatency(NUM_BACK_BUFFERS);
-        g_hSwapChainWaitableObject = g_pSwapChain->GetFrameLatencyWaitableObject();
-    }
-
-    CreateRenderTarget();
-    return true;
-}
-
-void CleanupDeviceD3D()
-{
-    CleanupRenderTarget();
-    if (g_pSwapChain)
-    {
-        g_pSwapChain->SetFullscreenState(false, nullptr);
-        g_pSwapChain->Release();
-        g_pSwapChain = nullptr;
-    }
-    if (g_hSwapChainWaitableObject != nullptr) { CloseHandle(g_hSwapChainWaitableObject); }
-    for (UINT i = 0; i < NUM_FRAMES_IN_FLIGHT; i++)
-        if (g_frameContext[i].CommandAllocator)
-        {
-            g_frameContext[i].CommandAllocator->Release();
-            g_frameContext[i].CommandAllocator = nullptr;
-        }
-    if (g_pd3dCommandQueue)
-    {
-        g_pd3dCommandQueue->Release();
-        g_pd3dCommandQueue = nullptr;
-    }
-    if (g_pd3dCommandList)
-    {
-        g_pd3dCommandList->Release();
-        g_pd3dCommandList = nullptr;
-    }
-    if (g_pd3dRtvDescHeap)
-    {
-        g_pd3dRtvDescHeap->Release();
-        g_pd3dRtvDescHeap = nullptr;
-    }
-    if (g_pd3dSrvDescHeap)
-    {
-        g_pd3dSrvDescHeap->Release();
-        g_pd3dSrvDescHeap = nullptr;
-    }
-    if (g_fence)
-    {
-        g_fence->Release();
-        g_fence = nullptr;
-    }
-    if (g_fenceEvent)
-    {
-        CloseHandle(g_fenceEvent);
-        g_fenceEvent = nullptr;
-    }
-    if (g_pd3dDevice)
-    {
-        g_pd3dDevice->Release();
-        g_pd3dDevice = nullptr;
-    }
-
-#ifdef DX12_ENABLE_DEBUG_LAYER
-    IDXGIDebug1* pDebug = nullptr;
-    if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDebug))))
-    {
-        pDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY);
-        pDebug->Release();
-    }
-#endif
-}
-
-void CreateRenderTarget()
-{
-    for (UINT i = 0; i < NUM_BACK_BUFFERS; i++)
-    {
-        ID3D12Resource* pBackBuffer = nullptr;
-        g_pSwapChain->GetBuffer(i, IID_PPV_ARGS(&pBackBuffer));
-        g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, g_mainRenderTargetDescriptor[i]);
-        g_mainRenderTargetResource[i] = pBackBuffer;
-    }
-}
-
-void CleanupRenderTarget()
-{
-    WaitForLastSubmittedFrame();
-
-    for (UINT i = 0; i < NUM_BACK_BUFFERS; i++)
-        if (g_mainRenderTargetResource[i])
-        {
-            g_mainRenderTargetResource[i]->Release();
-            g_mainRenderTargetResource[i] = nullptr;
-        }
-}
-
-void WaitForLastSubmittedFrame()
-{
-    FrameContext* frameCtx = &g_frameContext[g_frameIndex % NUM_FRAMES_IN_FLIGHT];
-
-    UINT64 fenceValue = frameCtx->FenceValue;
-    if (fenceValue == 0)
-        return; // No fence was signaled
-
-    frameCtx->FenceValue = 0;
-    if (g_fence->GetCompletedValue() >= fenceValue)
-        return;
-
-    g_fence->SetEventOnCompletion(fenceValue, g_fenceEvent);
-    WaitForSingleObject(g_fenceEvent, INFINITE);
-}
-
-FrameContext* WaitForNextFrameResources()
-{
-    UINT nextFrameIndex = g_frameIndex + 1;
-    g_frameIndex = nextFrameIndex;
-
-    HANDLE waitableObjects[] = {g_hSwapChainWaitableObject, nullptr};
-    DWORD numWaitableObjects = 1;
-
-    FrameContext* frameCtx = &g_frameContext[nextFrameIndex % NUM_FRAMES_IN_FLIGHT];
-    UINT64 fenceValue = frameCtx->FenceValue;
-    if (fenceValue != 0) // means no fence was signaled
-    {
-        frameCtx->FenceValue = 0;
-        g_fence->SetEventOnCompletion(fenceValue, g_fenceEvent);
-        waitableObjects[1] = g_fenceEvent;
-        numWaitableObjects = 2;
-    }
-
-    WaitForMultipleObjects(numWaitableObjects, waitableObjects, TRUE, INFINITE);
-
-    return frameCtx;
-}
-
-// Forward declare message handler from imgui_impl_win32.cpp
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-// Win32 message handler
-// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
@@ -668,15 +23,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_SIZE:
-        if (g_pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
+        if (g_D3DManager.pd3dDevice != nullptr && wParam != SIZE_MINIMIZED)
         {
-            WaitForLastSubmittedFrame();
-            CleanupRenderTarget();
-            HRESULT result = g_pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam),
-                                                         DXGI_FORMAT_UNKNOWN,
-                                                         DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+            g_D3DManager.WaitForLastSubmittedFrame();
+            g_D3DManager.CleanupRenderTarget();
+            HRESULT result = g_D3DManager.pSwapChain->ResizeBuffers(0, (UINT)LOWORD(lParam), (UINT)HIWORD(lParam),
+                                                                    DXGI_FORMAT_UNKNOWN,
+                                                                    DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
             assert(SUCCEEDED(result) && "Failed to resize swapchain.");
-            CreateRenderTarget();
+            g_D3DManager.CreateRenderTarget();
         }
         return 0;
     case WM_SYSCOMMAND:
@@ -688,4 +43,442 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
+}
+
+void CreateApplicationWindow(WNDCLASSEXW* pWindowClass, HWND* phWindow)
+{
+    // Create application window
+    ImGui_ImplWin32_EnableDpiAwareness();
+    *pWindowClass = {
+        sizeof(WNDCLASSEXW),
+        CS_CLASSDC,
+        WndProc,
+        0L,
+        0L,
+        GetModuleHandle(nullptr),
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        APP_NAME_W,
+        nullptr
+    };
+
+    // Set the Icon
+    // pWindowClass->hIcon = LoadIcon(pWindowClass->hInstance, MAKEINTRESOURCE(IDI_));
+    // pWindowClass->hIconSm = LoadIcon(pWindowClass->hInstance, MAKEINTRESOURCE(IDI_));
+
+    RegisterClassExW(pWindowClass);
+    *phWindow = CreateWindowW(
+        pWindowClass->lpszClassName,
+        APP_NAME_W,
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
+        0,
+        0,
+        800, 500,
+        nullptr,
+        nullptr,
+        pWindowClass->hInstance,
+        nullptr);
+}
+
+void SetupImGui(HWND hWindow)
+{
+    // Setup ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+    io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Game-pad Controls
+    io.FontDefault = io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\Calibri.ttf)", 13.0f);
+    io.IniFilename = nullptr; // Disable imgui.ini
+    io.LogFilename = nullptr;
+
+    // Setup ImGui style
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer back-ends
+    ImGui_ImplWin32_Init(hWindow);
+    ImGui_ImplDX12_Init(g_D3DManager.pd3dDevice, NUM_FRAMES_IN_FLIGHT,
+                        DXGI_FORMAT_R8G8B8A8_UNORM, g_D3DManager.pd3dSrvDescHeap,
+                        g_D3DManager.pd3dSrvDescHeap->GetCPUDescriptorHandleForHeapStart(),
+                        g_D3DManager.pd3dSrvDescHeap->GetGPUDescriptorHandleForHeapStart());
+}
+
+void PlatformCheckFrame()
+{
+    ImGui::OpenPopup("Platform Check");
+
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    // ImGui::SetNextWindowSize(center);
+
+    if (ImGui::BeginPopupModal("Platform Check", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Unsupported platform !!");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close", ImVec2(120, 0)))
+        {
+            ImGui::CloseCurrentPopup();
+            g_AppContext.CloseApp = true;
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
+
+void RrControllerFrame()
+{
+    ImGui::Text("Select Adapter");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(250);
+    if (ImGui::Combo("##combo1", &g_AppContext.currentAdapter, [](void* vec, int idx, const char** out_text)
+    {
+        const std::vector<DisplayAdapter>& adapter = *static_cast<std::vector<DisplayAdapter>*>(vec);
+        if (idx >= 0 && idx < static_cast<int>(adapter.size()))
+        {
+            *out_text = adapter[idx].Name.c_str();
+            return true;
+        }
+        return false;
+    }, &g_AppContext.RrController.AdapterList, static_cast<int>(g_AppContext.RrController.AdapterList.size())))
+    {
+        g_AppContext.RrController.SetActiveAdapter(g_AppContext.RrController.pActiveController,
+                                                   &g_AppContext.RrController.AdapterList[g_AppContext.currentAdapter]);
+    }
+
+    ImGui::SameLine();
+    ImGui::Text("Select Panel");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(150);
+    if (ImGui::Combo("##combo2", &g_AppContext.currentPanel, [](void* vec, int idx, const char** out_text)
+    {
+        const std::vector<DisplayPanel>& panel = *static_cast<std::vector<DisplayPanel>*>(vec);
+        if (idx >= 0 && idx < static_cast<int>(panel.size()))
+        {
+            *out_text = panel[idx].Name.c_str();
+            return true;
+        }
+        return false;
+    }, &g_AppContext.RrController.PanelList, static_cast<int>(g_AppContext.RrController.PanelList.size())))
+    {
+        g_AppContext.RrController.SetActivePanel(g_AppContext.RrController.pActiveController,
+                                                 &g_AppContext.RrController.PanelList[g_AppContext.currentPanel]);
+    }
+
+    ImGui::Dummy(ImVec2(0, 20));
+
+    if (g_AppContext.RrController.ActiveRrCaps.IsDisplayRrPresetsSupported)
+    {
+        ImGui::Text("Refresh Rate Preset");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(250);
+        if (ImGui::Combo("##combo3", &g_AppContext.currentPreset, [](void* vec, int idx, const char** out_text)
+        {
+            const std::vector<RrPreset>& preset = *static_cast<std::vector<RrPreset>*>(vec);
+            if (idx >= 0 && idx < static_cast<int>(preset.size()))
+            {
+                *out_text = preset[idx].Name.c_str();
+                return true;
+            }
+            return false;
+        }, &g_AppContext.RrController.RrPresetList, static_cast<int>(g_AppContext.RrController.RrPresetList.size())))
+        {
+            g_AppContext.RrController.pSelectedPreset = &g_AppContext.RrController.RrPresetList[g_AppContext.
+                currentPreset];
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        if (ImGui::Button("Apply"))
+        {
+            g_AppContext.RrController.Apply(g_AppContext.currentPreset);
+            for (int i = 0; i < g_AppContext.RrController.RrPresetList.size(); i++)
+                if (g_AppContext.RrController.RrPresetList[i].id == g_AppContext.RrController.pActivePreset->id)
+                    g_AppContext.currentPreset = i;
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        if (ImGui::Button("Refresh"))
+        {
+            g_AppContext.RrController.SetActivePanel(g_AppContext.RrController.pActiveController,
+                                                     g_AppContext.RrController.pActivePanel);
+            for (int i = 0; i < g_AppContext.RrController.RrPresetList.size(); i++)
+                if (g_AppContext.RrController.RrPresetList[i].id == g_AppContext.RrController.pActivePreset->id)
+                    g_AppContext.currentPreset = i;
+        }
+    }
+
+    ImGui::Dummy(ImVec2(0, 20));
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Adjust Refresh Rate Range (Gaming)");
+
+    if (g_AppContext.RrController.ActiveRrCaps.IsMinRrChangeSupported)
+    {
+        ImGui::SetNextItemWidth(150);
+        ImGui::Text("Minimum RR (Hz)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(250);
+        if ("CUSTOM" == g_AppContext.RrController.pSelectedPreset->Name)
+        {
+            ImGui::SliderFloat("##slider1", &g_AppContext.RrController.ActiveRrState.MinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMaxRr);
+        }
+        else
+        {
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+            ImGui::SliderFloat("##slider1", &g_AppContext.RrController.ActiveRrState.MinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMaxRr);
+            ImGui::PopItemFlag();
+            ImGui::PopStyleVar();
+        }
+    }
+
+    if (g_AppContext.RrController.ActiveRrCaps.IsMaxRrChangeSupported)
+    {
+        ImGui::SetNextItemWidth(150);
+        ImGui::Text("Maximum RR (Hz)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(250);
+        if ("CUSTOM" == g_AppContext.RrController.pSelectedPreset->Name)
+        {
+            g_AppContext.RrController.ActiveRrState.MaxRr = max(g_AppContext.RrController.ActiveRrState.MinRr,
+                                                                g_AppContext.RrController.ActiveRrState.MaxRr);
+            ImGui::SliderFloat("##slider2", &g_AppContext.RrController.ActiveRrState.MaxRr,
+                               g_AppContext.RrController.ActiveRrState.MinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMaxRr);
+        }
+        else
+        {
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+            ImGui::SliderFloat("##slider2", &g_AppContext.RrController.ActiveRrState.MaxRr,
+                               g_AppContext.RrController.ActiveRrState.MinRr,
+                               g_AppContext.RrController.ActiveRrCaps.SupportedMaxRr);
+            ImGui::PopItemFlag();
+            ImGui::PopStyleVar();
+        }
+    }
+
+    ImGui::Dummy(ImVec2(0, 20));
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                       "Adjust how fast the RR can change. A lower value can reduce flicker. (0 indicates no limit)");
+
+    int sliderMax = 65000; // 65ms
+    if ((0 != static_cast<int>(g_AppContext.RrController.ActiveRrCaps.SupportedMinRr)) && (0 != static_cast<int>(
+        g_AppContext.RrController
+                    .ActiveRrCaps.SupportedMaxRr)) && (g_AppContext.RrController.ActiveRrCaps.SupportedMaxRr >
+        g_AppContext.RrController.ActiveRrCaps.
+                     SupportedMinRr))
+        sliderMax = static_cast<int>(1000000 / g_AppContext.RrController.ActiveRrCaps.SupportedMinRr - 1000000 /
+            g_AppContext.RrController
+                        .ActiveRrCaps.SupportedMaxRr);
+
+    if (g_AppContext.RrController.ActiveRrCaps.IsFrameDurationIncreaseToleranceSupported)
+    {
+        ImGui::SetNextItemWidth(150);
+        ImGui::Text("Frame Duration Increase Tolerance (us)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(250);
+        if ("CUSTOM" == g_AppContext.RrController.pSelectedPreset->Name)
+        {
+            ImGui::SliderInt("##slider3", &g_AppContext.RrController.ActiveRrState.FrameDurationIncreaseTolerance, 0,
+                             sliderMax);
+        }
+        else
+        {
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+            ImGui::SliderInt("##slider3", &g_AppContext.RrController.ActiveRrState.FrameDurationIncreaseTolerance, 0,
+                             sliderMax);
+            ImGui::PopItemFlag();
+            ImGui::PopStyleVar();
+        }
+    }
+
+    if (g_AppContext.RrController.ActiveRrCaps.IsFrameDurationDecreaseToleranceSupported)
+    {
+        ImGui::SetNextItemWidth(150);
+        ImGui::Text("Frame Duration Decrease Tolerance (us)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(250);
+        if ("CUSTOM" == g_AppContext.RrController.pSelectedPreset->Name)
+        {
+            ImGui::SliderInt("##slider4", &g_AppContext.RrController.ActiveRrState.FrameDurationDecreaseTolerance, 0,
+                             sliderMax);
+        }
+        else
+        {
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+            ImGui::SliderInt("##slider4", &g_AppContext.RrController.ActiveRrState.FrameDurationDecreaseTolerance, 0,
+                             sliderMax);
+            ImGui::PopItemFlag();
+            ImGui::PopStyleVar();
+        }
+    }
+
+    ImGui::Dummy(ImVec2(0, 20));
+    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "FPS");
+    ImGui::SliderInt("##slider5", &g_AppContext.firstFps, 20, 300);
+}
+
+void delay(int delayInUs)
+{
+    const auto start = std::chrono::high_resolution_clock::now();
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    while (true)
+    {
+        stop = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+        if (duration.count() >= delayInUs)
+            return;
+    }
+}
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nShowCmd)
+{
+    UNREFERENCED_PARAMETER(hInstance);
+    UNREFERENCED_PARAMETER(hPrevInstance);
+    UNREFERENCED_PARAMETER(lpCmdLine);
+    UNREFERENCED_PARAMETER(nShowCmd);
+
+    CreateApplicationWindow(&g_AppContext.WindowClass, &g_AppContext.hWindow);
+
+    if (!g_D3DManager.CreateDeviceD3D(g_AppContext.hWindow))
+    {
+        g_D3DManager.CleanupDeviceD3D();
+        ::UnregisterClassW(g_AppContext.WindowClass.lpszClassName, g_AppContext.WindowClass.hInstance);
+        return 1;
+    }
+
+    ShowWindow(g_AppContext.hWindow, SW_SHOWDEFAULT);
+    UpdateWindow(g_AppContext.hWindow);
+
+    SetupImGui(g_AppContext.hWindow);
+
+    const bool IsRrControllerSupported = g_AppContext.RrController.Init();
+    if (IsRrControllerSupported)
+    {
+        for (int i = 0; i < g_AppContext.RrController.RrPresetList.size(); i++)
+            if (g_AppContext.RrController.RrPresetList[i].id == g_AppContext.RrController.pActivePreset->id)
+                g_AppContext.currentPreset = i;
+    }
+
+    while (!g_AppContext.CloseApp)
+    {
+        MSG msg;
+        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
+        {
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
+            if (msg.message == WM_QUIT)
+                g_AppContext.CloseApp = true;
+        }
+        if (g_AppContext.CloseApp)
+            break;
+
+        // Start the Dear ImGui frame
+        ImGui_ImplDX12_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        {
+#ifdef IMGUI_HAS_VIEWPORT
+            ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->GetWorkPos());
+            ImGui::SetNextWindowSize(viewport->GetWorkSize());
+            ImGui::SetNextWindowViewport(viewport->ID);
+#else
+            ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+            ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+#endif
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+
+            ImGui::Begin(APP_NAME, nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDecoration);
+
+            if (!IsRrControllerSupported)
+            {
+                PlatformCheckFrame();
+            }
+            else
+            {
+                RrControllerFrame();
+
+                const ImGuiIO& io = ImGui::GetIO();
+                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                delay(1000000 / g_AppContext.firstFps);
+            }
+
+            ImGui::End();
+        }
+
+        // Rendering
+        ImGui::Render();
+
+        FrameContext* frameCtx = g_D3DManager.WaitForNextFrameResources();
+        const UINT backBufferIdx = g_D3DManager.pSwapChain->GetCurrentBackBufferIndex();
+        frameCtx->CommandAllocator->Reset();
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = g_D3DManager.mainRenderTargetResource[backBufferIdx];
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        g_D3DManager.pd3dCommandList->Reset(frameCtx->CommandAllocator, nullptr);
+        g_D3DManager.pd3dCommandList->ResourceBarrier(1, &barrier);
+
+        // Render Dear ImGui graphics
+        constexpr ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+        constexpr float clear_color_with_alpha[4] = {
+            clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w
+        };
+        g_D3DManager.pd3dCommandList->ClearRenderTargetView(g_D3DManager.mainRenderTargetDescriptor[backBufferIdx],
+                                                            clear_color_with_alpha, 0,
+                                                            nullptr);
+        g_D3DManager.pd3dCommandList->OMSetRenderTargets(1, &g_D3DManager.mainRenderTargetDescriptor[backBufferIdx],
+                                                         FALSE, nullptr);
+        g_D3DManager.pd3dCommandList->SetDescriptorHeaps(1, &g_D3DManager.pd3dSrvDescHeap);
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_D3DManager.pd3dCommandList);
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        g_D3DManager.pd3dCommandList->ResourceBarrier(1, &barrier);
+        g_D3DManager.pd3dCommandList->Close();
+
+        g_D3DManager.pd3dCommandQueue->ExecuteCommandLists(
+            1, reinterpret_cast<ID3D12CommandList* const*>(&g_D3DManager.pd3dCommandList));
+
+        // g_D3DManager.pSwapChain->Present(1, 0); // Present with vsync
+        g_D3DManager.pSwapChain->Present(0, 0); // Present without vsync
+
+        const UINT64 fenceValue = g_D3DManager.fenceLastSignaledValue + 1;
+        g_D3DManager.pd3dCommandQueue->Signal(g_D3DManager.fence, fenceValue);
+        g_D3DManager.fenceLastSignaledValue = fenceValue;
+        frameCtx->FenceValue = fenceValue;
+    }
+
+    g_D3DManager.WaitForLastSubmittedFrame();
+
+    // Cleanup
+    ImGui_ImplDX12_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
+    g_D3DManager.CleanupDeviceD3D();
+    DestroyWindow(g_AppContext.hWindow);
+    UnregisterClassW(g_AppContext.WindowClass.lpszClassName, g_AppContext.WindowClass.hInstance);
+
+    return 0;
 }

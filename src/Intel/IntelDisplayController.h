@@ -2,10 +2,10 @@
 
 #include <map>
 
-#include "../DisplayControllerInterface.h"
+#include "../IDisplayController.h"
 #include "igcl_api.h"
 
-class IntelDisplayControllerAdapter final : public DisplayControllerInterface
+class IntelDisplayController final : public IDisplayController
 {
     bool IsInitialized = false;
     ctl_api_handle_t ApiHandle = {};
@@ -20,13 +20,13 @@ class IntelDisplayControllerAdapter final : public DisplayControllerInterface
     std::string GetPanelNameByType(ctl_display_output_types_t Type);
 
 public:
-    IntelDisplayControllerAdapter()
+    IntelDisplayController()
     {
         FillPresetMapping();
         InitControlLibrary();
     }
 
-    ~IntelDisplayControllerAdapter()
+    ~IntelDisplayController()
     {
         DestroyControlLibrary();
     }

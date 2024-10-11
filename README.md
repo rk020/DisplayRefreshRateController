@@ -1,6 +1,6 @@
 [![Build](https://github.com/rk020/DisplayRefreshRateController/actions/workflows/build.yml/badge.svg)](https://github.com/rk020/DisplayRefreshRateController/actions/workflows/build.yml)
 
-### [Download the latest build](https://github.com/rk020/DisplayRefreshRateController/actions/runs/7766652887/artifacts/1217315018)
+### [Download the latest build](https://github.com/rk020/DisplayRefreshRateController/actions/runs/11286451324/artifacts/2043700596)
 
 # Display Refresh Rate Controller
 

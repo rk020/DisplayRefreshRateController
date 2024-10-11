@@ -17,7 +17,7 @@ bool DisplayRrController::Apply(int SelectedPreset)
     return status;
 }
 
-void DisplayRrController::SetActivePanel(DisplayControllerInterface* pControlAdapter, DisplayPanel* pPanel)
+void DisplayRrController::SetActivePanel(IDisplayController* pControlAdapter, DisplayPanel* pPanel)
 {
     pActivePanel = pPanel;
 
@@ -41,7 +41,7 @@ void DisplayRrController::SetActivePanel(DisplayControllerInterface* pControlAda
     ActiveRrState = pControlAdapter->GetRrState(pActivePanel);
 }
 
-void DisplayRrController::SetActiveAdapter(DisplayControllerInterface* pControlAdapter,
+void DisplayRrController::SetActiveAdapter(IDisplayController* pControlAdapter,
                                            DisplayAdapter* pAdapter)
 {
     if ((nullptr != pActiveAdapter) && (pActiveAdapter->id == pAdapter->id))
@@ -58,16 +58,18 @@ void DisplayRrController::SetActiveAdapter(DisplayControllerInterface* pControlA
     SetActivePanel(pControlAdapter, &PanelList[0]);
 }
 
+DisplayRrController::~DisplayRrController()
+{
+    delete pActiveController;
+}
+
 bool DisplayRrController::Init()
 {
-    IntelController = IntelDisplayControllerAdapter();
-    pActiveController = &IntelController;
+    pActiveController = new IntelDisplayController();
 
     AdapterList = pActiveController->GetDisplayAdapters();
     if (AdapterList.empty())
-    {
         return false;
-    }
 
     SetActiveAdapter(pActiveController, &AdapterList[0]);
     return true;

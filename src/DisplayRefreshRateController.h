@@ -1,13 +1,12 @@
 #pragma once
-#include "Intel/IntelDisplayControllerAdapter.h"
+#include "Intel/IntelDisplayController.h"
 
 
 // DisplayRrController dialog
 class DisplayRrController
 {
 public:
-    IntelDisplayControllerAdapter IntelController;
-    DisplayControllerInterface* pActiveController;
+    IDisplayController* pActiveController = nullptr;
 
     std::vector<DisplayAdapter> AdapterList;
     DisplayAdapter* pActiveAdapter;
@@ -21,8 +20,10 @@ public:
     DisplayRrCaps ActiveRrCaps;
     DisplayRrState ActiveRrState, SelectedRrState;
 
+    virtual ~DisplayRrController();
+
     virtual bool Init();
-    virtual void SetActiveAdapter(DisplayControllerInterface*, DisplayAdapter*);
-    virtual void SetActivePanel(DisplayControllerInterface*, DisplayPanel*);
+    virtual void SetActiveAdapter(IDisplayController*, DisplayAdapter*);
+    virtual void SetActivePanel(IDisplayController*, DisplayPanel*);
     virtual bool Apply(int SelectedPreset);
 };

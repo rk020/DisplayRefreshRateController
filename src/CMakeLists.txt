@@ -3,6 +3,7 @@ enable_language(C CXX)
 
 set(APP_NAME "DisplayRefreshRateController")
 set(EXE_NAME "${APP_NAME}")
+set(APP_VERSION "2024.1.0")
 
 project(${APP_NAME})
 
@@ -49,6 +50,7 @@ source_group("Source Files\\igcl" FILES
 
 set(HEADER_FILES
     ${CMAKE_CURRENT_LIST_DIR}/D3DManager.h
+    ${CMAKE_CURRENT_LIST_DIR}/AppContext.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayRefreshRateController.h
     ${CMAKE_CURRENT_LIST_DIR}/DisplayControllerInterface.h
     )
@@ -90,6 +92,12 @@ source_group("Header Files\\igcl" FILES
     )
 
 set(CMAKE_CXX_STANDARD 17)
+
+add_compile_definitions(
+    APP_NAME="${APP_NAME}"
+    APP_NAME_W=L"${APP_NAME}"
+    APP_VERSION="${APP_VERSION}"
+)
 
 add_executable(${APP_NAME} WIN32 ${SOURCE_FILES} ${SOURCE_FILES_INTEL} ${SOURCE_FILES_IMGUI} ${SOURCE_FILES_IGCL} ${HEADER_FILES} ${HEADER_FILES_INTEL} ${HEADER_FILES_IMGUI} ${HEADER_FILES_IGCL})
 set_target_properties(${APP_NAME} PROPERTIES OUTPUT_NAME ${EXE_NAME})
